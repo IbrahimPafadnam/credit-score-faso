@@ -51,70 +51,134 @@ class AdvancedCreditScoring:
 
     def analyze_reputation(self, text):
         """
-        Analyse avancée de la réputation basée sur le sentiment du texte
-        Retourne une classification (Bon, Moyen, Faible) et un score numérique
+        Analyse avancée de la réputation avec prise en compte du contexte,
+        des expressions idiomatiques et des nuances linguistiques.
         """
         if not text:
             return 'Moyen', 0.5
 
         blob = TextBlob(text)
         
-        # Analyse approfondie du sentiment
+        # Analyse approfondie du sentiment avec plus de granularité
         sentiment_score = blob.sentiment.polarity
         subjectivity = blob.sentiment.subjectivity
         
-        # Mots clés positifs et négatifs avec pondération
+        # Dictionnaire enrichi de mots-clés et expressions avec pondération
         positive_keywords = {
-            'fiable': 0.3, 'honnête': 0.3, 'responsable': 0.25, 
-            'régulier': 0.2, 'stable': 0.2, 'recommandé': 0.3,
-            'confiance': 0.3, 'excellent': 0.3, 'ponctuel': 0.25,
-            'sérieux': 0.25, 'professionnel': 0.3
+            # Fiabilité financière
+            'fiable': 0.3, 'ponctuel': 0.3, 'régulier': 0.25,
+            'rembourse': 0.35, 'paiements à temps': 0.4,
+            'économe': 0.3, 'gestion saine': 0.35,
+            
+            # Réputation sociale
+            'respecté': 0.3, 'honnête': 0.35, 'responsable': 0.3,
+            'recommandé': 0.35, 'intègre': 0.35, 'digne de confiance': 0.4,
+            'bonne réputation': 0.35, 'apprécié': 0.25,
+            
+            # Comportement professionnel
+            'travailleur': 0.3, 'stable': 0.3, 'sérieux': 0.35,
+            'entreprenant': 0.25, 'professionnel': 0.3,
+            'bon gestionnaire': 0.35, 'organisé': 0.25,
+            'toujours ponctuel':0.25,
+            
+            # Expressions composées positives
+            'toujours remboursé': 0.45, 'jamais eu de problème': 0.4,
+            'très bien vu': 0.35, 'excellente réputation': 0.45,
+            'membre actif': 0.3, 'personne de confiance': 0.4
         }
         
         negative_keywords = {
-            'retard': -0.3, 'défaut': -0.3, 'problème': -0.25,
-            'dette': -0.3, 'irrégulier': -0.2, 'méfiance': -0.3,
-            'risque': -0.25, 'douteux': -0.3, 'mauvais': -0.3,
-            'arnaque': -0.4, 'malhonnête': -0.4
+            # Problèmes financiers
+            'retard': -0.3, 'défaut': -0.35, 'impayé': -0.4,
+            'dette': -0.35, 'découvert': -0.3, 'surendetté': -0.45,
+            'difficultés financières': -0.4,
+            
+            # Réputation négative
+            'méfiance': -0.35, 'douteux': -0.4, 'mauvaise réputation': -0.45,
+            'peu fiable': -0.4, 'malhonnête': -0.45, 'arnaqueur': -0.5,
+            'problématique': -0.35,
+            
+            # Comportement à risque
+            'instable': -0.35, 'irresponsable': -0.4, 'négligent': -0.35,
+            'absent': -0.3, 'irrégulier': -0.35, 'gambling': -0.45,
+            
+            # Expressions composées négatives
+            'mauvais payeur': -0.45, 'ne rembourse pas': -0.5,
+            'historique de défaut': -0.45, 'problèmes récurrents': -0.4,
+            'peu recommandable': -0.4, 'souvent en difficulté': -0.35
         }
         
-        # Analyse des mots clés
-        keyword_score = 0
+        # Analyse contextuelle approfondie
         text_lower = text.lower()
+        sentences = blob.sentences
         
-        # Compte des mots positifs et négatifs
+        # Scores initiaux
+        keyword_score = 0
         positive_count = 0
         negative_count = 0
+        context_score = 0
         
-        for word, weight in positive_keywords.items():
-            if word in text_lower:
-                keyword_score += weight
-                positive_count += 1
-                
-        for word, weight in negative_keywords.items():
-            if word in text_lower:
-                keyword_score += weight
-                negative_count += 1
+        # Analyse par phrase pour capturer le contexte
+        for sentence in sentences:
+            sentence_text = sentence.string.lower()
+            sentence_sentiment = sentence.sentiment.polarity
+            
+            # Vérification des mots-clés dans le contexte de la phrase
+            for word, weight in positive_keywords.items():
+                if word in sentence_text:
+                    # Amplification si plusieurs mots positifs dans la même phrase
+                    keyword_score += weight * (1 + 0.1 * positive_count)
+                    positive_count += 1
+                    
+                    # Bonus pour les expressions composées
+                    if len(word.split()) > 1 and word in sentence_text:
+                        keyword_score += 0.1
+                    
+            for word, weight in negative_keywords.items():
+                if word in sentence_text:
+                    # Impact plus fort des termes négatifs dans un contexte négatif
+                    keyword_score += weight * (1 + 0.1 * negative_count)
+                    negative_count += 1
+                    
+                    # Malus pour les expressions composées négatives
+                    if len(word.split()) > 1 and word in sentence_text:
+                        keyword_score -= 0.1
 
-        # Score final combiné avec ajustements
+            # Analyse des modificateurs de contexte
+            context_modifiers = {
+                'mais': -0.2, 'cependant': -0.2, 'néanmoins': -0.2,
+                'toutefois': -0.2, 'malgré': -0.2,
+                'toujours': 0.2, 'jamais': -0.2,
+                'régulièrement': 0.2, 'rarement': -0.1
+            }
+            
+            for modifier, impact in context_modifiers.items():
+                if modifier in sentence_text:
+                    context_score += impact * abs(sentence_sentiment)
+
+        # Calcul du score final avec pondération des différents facteurs
+        total_mentions = positive_count + negative_count
+        if total_mentions > 0:
+            mention_ratio = positive_count / total_mentions
+        else:
+            mention_ratio = 0.5
+
+        # Score final combiné avec tous les facteurs
         final_score = (
-            sentiment_score * 0.4 +  # Sentiment général
-            (1 - subjectivity) * 0.2 +  # Bonus pour l'objectivité
-            keyword_score * 0.4  # Impact des mots clés
+            sentiment_score * 0.3 +  # Sentiment général
+            (1 - subjectivity) * 0.15 +  # Objectivité
+            keyword_score * 0.3 +  # Impact des mots-clés
+            context_score * 0.15 +  # Impact du contexte
+            mention_ratio * 0.1  # Ratio positif/négatif
         )
         
-        # Ajustement basé sur le ratio de mots positifs/négatifs
-        if positive_count + negative_count > 0:
-            sentiment_ratio = positive_count / (positive_count + negative_count)
-            final_score = final_score * 0.8 + sentiment_ratio * 0.2
-        
-        # Normalisation du score entre 0 et 1
+        # Normalisation et ajustement final
         final_score = max(0, min(1, (final_score + 1) / 2))
         
-        # Classification basée sur le score avec seuils ajustables
-        if final_score >= 0.7:
+        # Classification plus nuancée
+        if final_score >= 0.75:
             return 'Bon', final_score
-        elif final_score >= 0.4:
+        elif final_score >= 0.45:
             return 'Moyen', final_score
         else:
             return 'Faible', final_score
